@@ -200,7 +200,8 @@ void updateWindow()
 	//刷新图形窗口
 	//FlushBatchDraw(); //刷新图形窗口，显示所有绘制的内容
 	EndBatchDraw(); //结束批量绘图，显示所有绘制的内容
-
+	
+	//sleep(20); //延时20毫秒，控制帧率
 }
 
 // 修复 collectSunshine 函数中的 mciSendString 调用
