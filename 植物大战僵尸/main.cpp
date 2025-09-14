@@ -13,6 +13,9 @@
 #include <time.h>
 #include"tools.h" 
 
+#include <mmsyscom.h>
+#pragma comment(lib, "winmm.lib")
+
 #define WIN_WIDTH 900 //游戏窗口宽度
 #define WIN_HEIGHT 600 //游戏窗口高度
 
@@ -22,6 +25,7 @@ IMAGE imgBg; //表示背景图片
 IMAGE imgBar; //表示游戏中的任务栏
 IMAGE imgCards[ZHI_WU_COUNT];
 IMAGE* imgZhiWu[ZHI_WU_COUNT][20]; //表示植物图片
+
 
 
 int curX, curY; //表示当前鼠标的坐标
@@ -39,6 +43,7 @@ struct sunshineBall {
 	int frameIndex; //当前播放到第几帧
 	int destY; //阳光掉落的目标y坐标
 	int used; //是否被使用 0:未使用 1:已使用 
+	//int speed; //阳光下落的速度（像素/帧）
 	//int timer; //阳光生成的时间
 	DWORD landTime; // 新增：记录阳光落地的时间（毫秒）
 }; 
@@ -46,6 +51,7 @@ bool isSunshineActive = false; // 初始为false，表示没有活跃的阳光
 //10个阳光球(循环出现)
 struct sunshineBall balls[10];
 IMAGE imgSunshineBall[29]; //阳光图片
+int sunshine;
 
 bool fileExist(const char* name) {
 	FILE* fp = fopen(name, "r");
@@ -95,7 +101,8 @@ void gameInit()
 			
 		}
 	}
-
+	curZhiWu = 0; //初始化当前选中的植物为0
+	sunshine = 50; //初始化阳光数为50
 	
 	memset(balls, 0, sizeof(balls)); //将阳光球数组清零
 	// 修复思路：loadimage函数需要第二个参数为LPCTSTR类型（即TCHAR*），而你的代码传入的是char*类型。
@@ -113,6 +120,24 @@ void gameInit()
 	//创建游戏窗口:
 	initgraph(WIN_WIDTH, WIN_HEIGHT, 1); //创建800*600的窗口，显示控制台，禁止关闭和最小化
 	
+	// set font设置字体
+	LOGFONT f;
+	gettextstyle(&f);
+	f.lfHeight = 30;
+	f.lfWeight = 15;
+	//strcpy(f.lfFaceName, "Segee UI Black");
+	// 处理字体名称的窄→宽转换
+	const char* fontName = "Segoe UI Black"; // 修正字体名拼写（Segoe 是微软常用无衬线字体）
+	int wideCharLen = MultiByteToWideChar(CP_ACP, 0, fontName, -1, NULL, 0);
+	wchar_t wideFontName[LF_FACESIZE];
+	MultiByteToWideChar(CP_ACP, 0, fontName, -1, wideFontName, wideCharLen);
+	wcscpy(f.lfFaceName, wideFontName);
+
+	f.lfQuality = ANTIALIASED_QUALITY; //抗锯齿效果
+	settextstyle(&f);
+	setbkmode(TRANSPARENT);
+	setcolor(BLACK);
+
 	//关闭图形窗口
 	//closegraph();
 }
@@ -162,10 +187,44 @@ void updateWindow()
 		}
 	}
 
+	char scoreText[8];
+	sprintf_s(scoreText, sizeof(scoreText), "%d", sunshine);
+	// 1. 计算宽字符串所需长度
+	int wideLen = MultiByteToWideChar(CP_ACP, 0, scoreText, -1, NULL, 0);
+	// 2. 定义宽字符串缓冲区（长度+1确保容纳结束符）
+	wchar_t wideScoreText[8];
+	// 3. 转换窄字符串到宽字符串
+	MultiByteToWideChar(CP_ACP, 0, scoreText, -1, wideScoreText, wideLen);
+	outtextxy(276, 67, wideScoreText);
+
 	//刷新图形窗口
 	//FlushBatchDraw(); //刷新图形窗口，显示所有绘制的内容
 	EndBatchDraw(); //结束批量绘图，显示所有绘制的内容
 
+}
+
+// 修复 collectSunshine 函数中的 mciSendString 调用
+void collectSunshine(ExMessage* msg) {
+	int count = sizeof(balls) / sizeof(balls[0]);
+	int w = imgSunshineBall[0].getwidth();
+	int h = imgSunshineBall[0].getheight();
+	for (int i = 0; i < count; i++) {
+		if (balls[i].used) {
+			int x = balls[i].x;
+			int y = balls[i].y;
+			if (msg->x > x && msg->x < x + w &&
+				msg->y > y && msg->y < y + h) {
+				balls[i].used = false;
+				sunshine += 25;
+				// 关键修复：阳光被收集后，标记“无活跃阳光”
+				isSunshineActive = false;
+				// 修复：将窄字符转换为宽字符
+				wchar_t cmd[64];
+				MultiByteToWideChar(CP_ACP, 0, "play res/sunshine.mp3", -1, cmd, 64);
+				mciSendString(cmd, 0, 0, 0);
+			}
+		}
+	}
 }
 
 //用户的点击事件
@@ -181,6 +240,9 @@ void userClick(){
 				status = 1; //表示用户点击了某张卡牌
 				curZhiWu = index + 1; //记录当前选中的植物
 			}
+			else {
+				collectSunshine(&msg);
+			}//or catch sunshine
 		}
 		else if (msg.message == WM_MOUSEMOVE && status == 1) { //鼠标移动
 			curX = msg.x;
@@ -201,6 +263,10 @@ void userClick(){
 				//curZhiWu = 0; // 重置“选中植物”（后续可改为“判断种植后再重置”
 			}
 			
+		}
+		else if( msg.message == WM_RBUTTONDOWN) { //右键按下
+			status = 0; //重置状态
+			curZhiWu = 0; //重置当前选中的植物
 		}
 	}
 	
