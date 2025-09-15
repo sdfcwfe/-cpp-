@@ -53,6 +53,18 @@ struct sunshineBall balls[10];
 IMAGE imgSunshineBall[29]; //阳光图片
 int sunshine;
 
+//zombie
+struct zm {
+	int x, y; //僵尸的坐标
+	int type; //僵尸的类型 0:没有僵尸 1:普通僵尸 2:路障僵尸
+	int frameIndex; //当前播放到第几帧
+	int hp; //僵尸的血量
+	int speed; //僵尸的移动速度（像素/帧）
+	bool used; //是否被使用 0:未使用 1:已使用
+};
+struct zm zms[10]; //10个僵尸
+IMAGE imgZM[22]; //僵尸图片
+
 bool fileExist(const char* name) {
 	FILE* fp = fopen(name, "r");
 	if(fp == NULL) {
@@ -60,7 +72,7 @@ bool fileExist(const char* name) {
 	}
 	else {
 		fclose(fp);
-		return true;
+		return true; 
 	}
 }
 
@@ -138,8 +150,47 @@ void gameInit()
 	setbkmode(TRANSPARENT);
 	setcolor(BLACK);
 
+	//加载僵尸图片
+	memset(zms, 0, sizeof(zms)); //将僵尸数组清零
+	for(int i = 0; i < 22; i++) {
+		sprintf_s(name, sizeof(name), "res/ZM/%d.png", i + 1);
+		wchar_t wname[64];
+		MultiByteToWideChar(CP_ACP, 0, name, -1, wname, 64);//important
+		loadimage(&imgZM[i], wname);
+	}
+
+
 	//关闭图形窗口
 	//closegraph();
+}
+
+void drawZM() {
+	int zmMax = sizeof(zms) / sizeof(zms[0]);
+	for(int i = 0; i < zmMax; i++) {
+		if (zms[i].used) {
+			IMAGE* img = &imgZM[zms[i].frameIndex];
+			putimagePNG(
+				zms[i].x, 
+				zms[i].y-img->getheight(),
+				img
+			);
+
+			/*int x = zms[i].x;
+			int y = zms[i].y;
+			int type = zms[i].type;
+			int index = zms[i].frameIndex;*/
+			//putimagePNG(curX , curY , img);
+			//if (type == 1) { //普通僵尸
+			//	if (imgZM[index] != NULL) {
+			//		putimagePNG(x, y, &imgZM[index]);
+			//	}
+			//}else if (type == 2) { //路障僵尸
+			//	if (imgZM[11 + index] != NULL) {
+			//		putimagePNG(x, y, &imgZM[11 + index]);
+			//	}
+			//}
+		}
+	}
 }
 
 void updateWindow()
@@ -196,6 +247,10 @@ void updateWindow()
 	// 3. 转换窄字符串到宽字符串
 	MultiByteToWideChar(CP_ACP, 0, scoreText, -1, wideScoreText, wideLen);
 	outtextxy(276, 67, wideScoreText);
+
+
+	//zombie绘制
+	drawZM();
 
 	//刷新图形窗口
 	//FlushBatchDraw(); //刷新图形窗口，显示所有绘制的内容
@@ -347,6 +402,71 @@ void updateSunshine() {
 
 }
 
+void createZM(){
+	//static DWORD lastZmTime = 0;
+	static int zmFre = 1000; //僵尸生成的频率
+	static int count = 0;
+	count++;
+	if (count >= zmFre) {
+		count = 0;
+		zmFre = 300 + rand() % 200;
+		if (rand() % 100 < 2) { //2%的概率生成僵尸
+			int i;
+			int zmMax = sizeof(zms) / sizeof(zms[0]);
+			for (i = 0; i < zmMax && zms[i].used; i++);
+			if (i < zmMax) {
+				zms[i].used = true;
+				//zms[i].type = 1; //普通僵尸
+				zms[i].frameIndex = 0;
+				zms[i].x = WIN_WIDTH;
+				int row = rand() % 3 + 1;
+				zms[i].y = 172 + row * 100;
+				//zms[i].hp = 100;
+				zms[i].speed = 1 + rand() % 2; //1-3像素/帧
+
+			}
+		}
+		
+	}
+}
+
+void updateZM() {
+	int zmMax = sizeof(zms) / sizeof(zms[0]);//个数
+	static DWORD lastMoveTime = 0;
+	const int MOVE_INTERVAL = 100; // 每 100ms 更新一次
+	DWORD now = GetTickCount();
+
+	//更新僵尸位置
+	if (now - lastMoveTime >= MOVE_INTERVAL) {
+		for (int i = 0; i < zmMax; i++) {
+			if (zms[i].used) {
+				zms[i].x -= zms[i].speed; // 速度保持 1-2 像素
+				zms[i].frameIndex = (zms[i].frameIndex + 1) % 22;
+				if (zms[i].x < 170) {
+					MessageBox(NULL, _T("Game Over!"), _T("提示"), MB_OK);
+					exit(0);
+				}
+			}
+		}
+		lastMoveTime = now;
+	}
+	//for(int i = 0; i < zmMax; i++) {
+	//	if (zms[i].used) {
+	//		zms[i].x -= zms[i].speed;
+	//		if (zms[i].x < 170) {
+	//			//zms[i].used = false;
+	//			printf("Game Over!\n");
+	//			MessageBox(NULL, _T("Game Over!"), _T("提示"), MB_OK);
+	//			exit(0);
+	//		}
+	//		else {
+	//			zms[i].frameIndex = (zms[i].frameIndex + 1) % 22;
+	//			putimagePNG(zms[i].x, zms[i].y, &imgZM[zms[i].frameIndex]);
+	//		}
+	//	}
+	//} 
+}
+
 //改变游戏的状态
 void updateGame(){
 	// 1. 静态变量记录上一次更新动画的时间（只初始化一次）
@@ -378,6 +498,9 @@ void updateGame(){
 	}
 	createSunshine();//创建阳光iu
 	updateSunshine(); //更新阳光状态
+
+	createZM(); //创建僵尸
+	updateZM();//更新僵尸状态
 }
 void startUI(){
 	IMAGE imgBg,imgMenu1, imgMenu2;
