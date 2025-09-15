@@ -11,6 +11,7 @@
 #include <Windows.h>
 #include <conio.h>
 #include <time.h>
+#include <math.h>
 #include"tools.h" 
 
 #include <mmsyscom.h>
@@ -46,6 +47,9 @@ struct sunshineBall {
 	//int speed; //阳光下落的速度（像素/帧）
 	//int timer; //阳光生成的时间
 	DWORD landTime; // 新增：记录阳光落地的时间（毫秒）
+
+	float xoff;
+	float yoff;
 }; 
 bool isSunshineActive = false; // 初始为false，表示没有活跃的阳光
 //10个阳光球(循环出现)
@@ -278,6 +282,12 @@ void collectSunshine(ExMessage* msg) {
 				wchar_t cmd[64];
 				MultiByteToWideChar(CP_ACP, 0, "play res/sunshine.mp3", -1, cmd, 64);
 				mciSendString(cmd, 0, 0, 0);
+				//设置阳光偏移量
+				float destY = 0;
+				float destX = 0;
+				float angle = atan((y - destY) / (x - destX));
+				balls[i].xoff = 4 * cos(angle);
+				balls[i].yoff = 4 * sin(angle);
 			}
 		}
 	}
@@ -348,6 +358,9 @@ void createSunshine() {
 		balls[i].y = 60;
 		balls[i].destY = 200 + (rand() % 4) * 90; //
 		balls[i].landTime = 0; // 初始化落地时间为0
+		balls[i].xoff = 0;
+		balls[i].yoff = 0;
+
 
 		// 标记“有活跃阳光”
 		isSunshineActive = true;
@@ -366,34 +379,41 @@ void updateSunshine() {
 
 	int ballMax = sizeof(balls) / sizeof(balls[0]); // 是数组中元素的总个数
 	for (int i = 0; i < ballMax; i++) {
+		//更新阳光球的动画
 		if (balls[i].used) {
-			//更新阳光球的动画
-			if (balls[i].used) {
-				if (now - lastSunMoveTime >= 50) {
-					balls[i].frameIndex = (balls[i].frameIndex + 1) % 29;
-				}
-				//balls[i].frameIndex = (balls[i].frameIndex + 1) % 29;
-				// 2. 位置更新：仅当时间间隔超过100毫秒时才移动
-				if (now - lastSunMoveTime >= SUN_MOVE_INTERVAL) {
-					balls[i].y += 4; // 步长可保留2，因更新频率降低，实际速度变慢
+			if (now - lastSunMoveTime >= 50) {
+				balls[i].frameIndex = (balls[i].frameIndex + 1) % 29;
+			}
+			//balls[i].frameIndex = (balls[i].frameIndex + 1) % 29;
+			// 2. 位置更新：仅当时间间隔超过100毫秒时才移动
+			if (now - lastSunMoveTime >= SUN_MOVE_INTERVAL) {
+				balls[i].y += 4; // 步长可保留2，因更新频率降低，实际速度变慢
+			}
+
+			if(balls[i].y >= balls[i].destY) {
+				// 第一次落地时，记录当前时间（只记录一次）
+				if ((balls[i].landTime == 0)) {
+					balls[i].y = balls[i].destY; // 固定在目标位置
+					balls[i].landTime = now; // 记录落地时间
 				}
 
-				if(balls[i].y >= balls[i].destY) {
-					// 第一次落地时，记录当前时间（只记录一次）
-					if ((balls[i].landTime == 0)) {
-						balls[i].y = balls[i].destY; // 固定在目标位置
-						balls[i].landTime = now; // 记录落地时间
-					}
-
-					// 计算已停留的时间：当前时间 - 落地时间
-					if (now - balls[i].landTime >= STAY_TIME) {
-						balls[i].used = false; // 停留够5秒后消失
-						isSunshineActive = false; // 允许生成下一个阳光
-					}
+				// 计算已停留的时间：当前时间 - 落地时间
+				if (now - balls[i].landTime >= STAY_TIME) {
+					balls[i].used = false; // 停留够5秒后消失
+					isSunshineActive = false; // 允许生成下一个阳光
 				}
 			}
-			
 		}
+		else if (balls[i].xoff) {
+			balls[i].x -= balls[i].xoff;
+			balls[i].y -= balls[i].yoff;
+			if (balls[i].y < 0 || balls[i].y) {
+				balls[i].used = false; // 移动出屏幕后消失
+				balls[i].xoff = 0; // 重置偏移量
+				isSunshineActive = false; // 允许生成下一个阳光
+			}
+		}
+		
 		// 更新“上一次位置更新时间”（仅当移动过才更新，避免多次触发）
 		if (now - lastSunMoveTime >= SUN_MOVE_INTERVAL) {
 			lastSunMoveTime = now;
@@ -408,7 +428,7 @@ void createZM(){
 	static int count = 0;
 	count++;
 	if (count >= zmFre) {
-		count = 0;
+		count = 0; 
 		zmFre = 300 + rand() % 200;
 		if (rand() % 100 < 2) { //2%的概率生成僵尸
 			int i;
@@ -433,6 +453,7 @@ void createZM(){
 void updateZM() {
 	int zmMax = sizeof(zms) / sizeof(zms[0]);//个数
 	static DWORD lastMoveTime = 0;
+	static int count = 0;    
 	const int MOVE_INTERVAL = 100; // 每 100ms 更新一次
 	DWORD now = GetTickCount();
 
@@ -444,7 +465,7 @@ void updateZM() {
 				zms[i].frameIndex = (zms[i].frameIndex + 1) % 22;
 				if (zms[i].x < 170) {
 					MessageBox(NULL, _T("Game Over!"), _T("提示"), MB_OK);
-					exit(0);
+					exit(0);//游戏结束
 				}
 			}
 		}
