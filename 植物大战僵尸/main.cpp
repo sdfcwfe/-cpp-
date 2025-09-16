@@ -65,9 +65,20 @@ struct zm {
 	int hp; //僵尸的血量
 	int speed; //僵尸的移动速度（像素/帧）
 	bool used; //是否被使用 0:未使用 1:已使用
+	int row; //僵尸所在的行
 };
 struct zm zms[10]; //10个僵尸
 IMAGE imgZM[22]; //僵尸图片
+
+// 子弹的数据结构体
+struct bullet {
+	int x, y; //子弹的坐标
+	int speed; //子弹的移动速度（像素/帧）
+	int row; //子弹所在的行
+	bool used; //是否被使用 0:未使用 1:已使用
+};
+struct bullet bullets[30]; //30个子弹
+IMAGE imgBulletNormal; //子弹正常图片
 
 bool fileExist(const char* name) {
 	FILE* fp = fopen(name, "r");
@@ -163,6 +174,9 @@ void gameInit()
 		loadimage(&imgZM[i], wname);
 	}
 
+	loadimage(&imgBulletNormal, _T("res/bullets/bullet_normal.png")); //加载子弹图片
+	memset(bullets, 0, sizeof(bullets)); //将子弹数组清零
+	
 
 	//关闭图形窗口
 	//closegraph();
@@ -439,8 +453,9 @@ void createZM(){
 				//zms[i].type = 1; //普通僵尸
 				zms[i].frameIndex = 0;
 				zms[i].x = WIN_WIDTH;
-				int row = rand() % 3 + 1;
-				zms[i].y = 172 + row * 100;
+				zms[i].row = rand() % 3; //0-2//随机生成行0-3
+				//int rows = rand() % 3 + 1;
+				zms[i].y = 172 + (1 + zms[i].row) * 100; 
 				//zms[i].hp = 100;
 				zms[i].speed = 1 + rand() % 2; //1-3像素/帧
 
@@ -488,6 +503,30 @@ void updateZM() {
 	//} 
 }
 
+void shoot() {
+	for(int i = 0; i < 3; i++) {
+		for(int j = 0; j < 9; j++) {
+			if (map[i][j].type == 1) { //如果是豌豆射手
+				static int shootCount = 0;
+				shootCount++;
+				if (shootCount >= 300) { //每300帧发射一颗子弹
+					shootCount = 0;
+					int k;
+					int bulletMax = sizeof(bullets) / sizeof(bullets[0]);
+					for (k = 0; k < bulletMax && bullets[k].used; k++);
+					if (k < bulletMax) {
+						bullets[k].used = true;
+						bullets[k].x = 256 + j * 81 + 50; //子弹初始位置
+						bullets[k].y = 179 + i * 102 + 50;
+						bullets[k].speed = 5; //子弹速度
+						bullets[k].row = i; //子弹所在行
+					}
+				}
+			}
+		}
+	}
+}
+
 //改变游戏的状态
 void updateGame(){
 	// 1. 静态变量记录上一次更新动画的时间（只初始化一次）
@@ -522,6 +561,8 @@ void updateGame(){
 
 	createZM(); //创建僵尸
 	updateZM();//更新僵尸状态
+
+	shoot();//射击
 }
 void startUI(){
 	IMAGE imgBg,imgMenu1, imgMenu2;
