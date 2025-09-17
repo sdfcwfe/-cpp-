@@ -504,22 +504,49 @@ void updateZM() {
 }
 
 void shoot() {
-	for(int i = 0; i < 3; i++) {
-		for(int j = 0; j < 9; j++) {
-			if (map[i][j].type == 1) { //如果是豌豆射手
-				static int shootCount = 0;
-				shootCount++;
-				if (shootCount >= 300) { //每300帧发射一颗子弹
-					shootCount = 0;
+	int lines[3] = { 0 };
+	int zmCount = sizeof(zms) / sizeof(zms[0]);
+	int dangerX = WIN_WIDTH - imgZM[0].getwidth();
+	int bulletCount = sizeof(bullets) / sizeof(bullets[0]);
+
+	for(int i = 0; i < zmCount; i++) {
+		//for(int j = 0; j < 9; j++) {
+		if (zms[i].used && zms[i].x < dangerX) { //
+			//等待僵尸 are out;出现在指定位置;
+			lines[zms[i].row] = 1;
+		}
+	}
+	for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 9; j++) {
+			if(map[i][j].type == WAN_DOU + 1 && lines[i] ) {
+				//有植物且该行有僵尸
+				//创建子弹
+				//int bulletCount = sizeof(bullets) / sizeof(bullets[0]);
+				//int k;
+				//for (k = 0; k < bulletCount && bullets[k].used; k++);
+				//if (k < bulletCount) {
+				//	bullets[k].used = true;
+				//	bullets[k].x = 256 + j * 81 + imgZhiWu[0][0]->getwidth();
+				//	bullets[k].y = 179 + i * 102 + 50;
+				//	bullets[k].speed = 5; //5像素/帧
+				//	bullets[k].row = i;
+				//}
+				static int count = 0;
+				count++;
+				if (count >= 20) { //每20帧创建一个子弹
+					count = 0; 
 					int k;
-					int bulletMax = sizeof(bullets) / sizeof(bullets[0]);
-					for (k = 0; k < bulletMax && bullets[k].used; k++);
-					if (k < bulletMax) {
+					for (k = 0; k < bulletCount && bullets[k].used; k++);
+					if (k < bulletCount) {
 						bullets[k].used = true;
-						bullets[k].x = 256 + j * 81 + 50; //子弹初始位置
+						bullets[k].x = 256 + j * 81 + imgZhiWu[0][0]->getwidth();
 						bullets[k].y = 179 + i * 102 + 50;
-						bullets[k].speed = 5; //子弹速度
-						bullets[k].row = i; //子弹所在行
+						bullets[k].speed = 5; //5像素/帧
+						bullets[k].row = i; 
+						int zwX = 256 + j * 81;
+						int zwY = 179 + i * 102 + 14;
+						bullets[k].x = zwX + imgZhiWu[map[i][j].type - 1][0]->getwidth() - 10;
+						bullets[k].y = zwY + 5;
 					}
 				}
 			}
