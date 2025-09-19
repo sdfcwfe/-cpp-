@@ -35,6 +35,8 @@ int curZhiWu = 0; //表示当前选中的植物 0未选中,1豌豆射手,2向日葵
 struct zhiwu{
 	int type; //0:没有植物;1:有植物;
 	int frameIndex; //当前播放到第几帧
+	bool catched; //是否被僵尸吃
+	int deadTime; //植物的血量
 };
 
 struct zhiwu map[3][9]; //表示游戏中的植物
@@ -67,10 +69,13 @@ struct zm {
 	bool used; //是否被使用 0:未使用 1:已使用
 	int row; //僵尸所在的行
 	bool dead; // 僵尸是否dead
+
+	bool eating; //僵尸是否在吃植物
 };
 struct zm zms[10]; //10个僵尸
 IMAGE imgZM[22]; //僵尸图片
 IMAGE imgZMDead[20]; 
+IMAGE imgZMEat[21];//僵尸吃植物图片
 
 // 子弹的数据结构体
 struct bullet {
@@ -191,6 +196,7 @@ void gameInit()
 			imgBullBlast[3].getheight() * k,true);
 	}
 
+	//加载僵尸吃植物图片
 	for (int i = 0; i < 20; i++) {
 		//使用char字符而非_t()宽字符宏
 		sprintf_s(name, sizeof(name), "res/zm_dead/%d.png", i + 1);
@@ -199,6 +205,13 @@ void gameInit()
 		loadimage(&imgZMDead[i], wname);
 	}
 
+	//加载僵尸吃植物图片
+	for(int i = 0; i < 21; i++) {
+		sprintf_s(name, sizeof(name), "res/zm_eat/%d.png", i + 1);
+		wchar_t wname[64];
+		MultiByteToWideChar(CP_ACP, 0, name, -1, wname, 64);//important
+		loadimage(&imgZMEat[i], wname);
+	}
 	//关闭图形窗口
 	//closegraph();
 }
@@ -209,10 +222,15 @@ void drawZM() {
 		if (zms[i].used) {
 			// IMAGE* img = &imgZM[zms[i].frameIndex];
 			//IMAGE* img = (zms[i].dead) ? imgZMDead : imgZM;
-			// 
-			IMAGE* imgArray = zms[i].dead ? imgZMDead : imgZM;
+			//IMAGE* imgArray = zms[i].dead ? imgZMDead : imgZM;
 			// img += zms[i].frameIndex;
 			// 计算安全的帧索引,防止越界）
+			IMAGE* imgArray = NULL;
+			if (zms[i].dead)  imgArray = imgZMDead;//僵尸死亡
+			else if (zms[i].eating) imgArray = imgZMEat;//僵尸吃植物
+			else imgArray = imgZM;//普通僵尸
+
+
 			int maxFrames = zms[i].dead ? 20 : 22;
 			int frameIndex = zms[i].frameIndex % maxFrames;
 
@@ -501,6 +519,8 @@ void createZM(){
 			int zmMax = sizeof(zms) / sizeof(zms[0]);
 			for (i = 0; i < zmMax && zms[i].used; i++);
 			if (i < zmMax) {
+				memset(&zms[i], 0, sizeof(zms[i]));//清零
+
 				zms[i].used = true;
 				//zms[i].type = 1; //普通僵尸
 				zms[i].frameIndex = 0;
@@ -540,11 +560,17 @@ void updateZM() {
 					}
 					continue; //跳过后续移动和动画更新
 				}
-				zms[i].x -= zms[i].speed; // 速度保持 1-2 像素
-				zms[i].frameIndex = (zms[i].frameIndex + 1) % 22;
-				if (zms[i].x < 170) {
- 					MessageBox(NULL, _T("Game Over!"), _T("提示"), MB_OK);
-					exit(0);//游戏结束
+				else if(zms[i].eating){
+					zms[i].frameIndex = (zms[i].frameIndex + 1) % 21;
+
+				}
+				else {
+					zms[i].x -= zms[i].speed; // 速度保持 1-2 像素
+					zms[i].frameIndex = (zms[i].frameIndex + 1) % 22;
+					if (zms[i].x < 170) {
+						MessageBox(NULL, _T("Game Over!"), _T("提示"), MB_OK);
+						exit(0);//游戏结束
+					}
 				}
 			}
 		}
@@ -584,17 +610,6 @@ void shoot() {
 		for (int j = 0; j < 9; j++) {
 			if(map[i][j].type == WAN_DOU + 1 && lines[i] ) {
 				//有植物且该行有僵尸
-				//创建子弹
-				//int bulletCount = sizeof(bullets) / sizeof(bullets[0]);
-				//int k;
-				//for (k = 0; k < bulletCount && bullets[k].used; k++);
-				//if (k < bulletCount) {
-				//	bullets[k].used = true;
-				//	bullets[k].x = 256 + j * 81 + imgZhiWu[0][0]->getwidth();
-				//	bullets[k].y = 179 + i * 102 + 50;
-				//	bullets[k].speed = 5; //5像素/帧
-				//	bullets[k].row = i;
-				//}
 				static int count = 0;
 				count++;
 				if (count >= 500) { //每20帧创建一个子弹
@@ -664,7 +679,7 @@ void updateBullets() {
 	}
 }
 
-void collisionCheck() {
+void checkBullet2Zm() {
 	int bCount = sizeof(bullets) / sizeof(bullets[0]);
 	int zCount = sizeof(zms) / sizeof(zms[0]);
 
@@ -676,7 +691,7 @@ void collisionCheck() {
 			int x1 = zms[k].x + 50;
 			int x2 = zms[k].x + 100;
 			int x = bullets[i].x;
-			if (zms[k].dead == false && bullets[i].row == zms[k].row && x > x1 && x < x2 ) {
+			if (zms[k].dead == false && bullets[i].row == zms[k].row && x > x1 && x < x2) {
 				zms[k].blood -= 20;
 				bullets[i].blast = true;
 				bullets[i].speed = 0;
@@ -690,10 +705,77 @@ void collisionCheck() {
 				}
 				break; // 子弹已击中，跳出僵尸循环
 			}
-
 		}
 	}
 }
+
+void checkZm2ZhiWu() {
+	int zCount = sizeof(zms) / sizeof(zms[0]);
+	// 1. 定义常量：统一控制啃食频率和植物血量（便于后续调整）
+	const int EAT_FRAME_THRESHOLD = 300;  // 啃食间隔：300帧（≈5秒/次，原100帧→减慢3倍）
+	const int PLANT_MAX_HP = 300;        // 植物总血量：300（原500→适当降低，避免过强）
+	const int EAT_DAMAGE = 100;          // 每次啃食伤害：100（3次攻击植物死亡）
+	for (int i = 0; i < zCount; i++) {
+		if (zms[i].dead) continue;
+
+		int row = zms[i].row;
+		bool isEatingAnyPlant = false;  // 标记当前僵尸是否正在啃食某株植物
+		for(int j = 0; j < 9; j++) {
+			if (map[row][j].type == 0) continue;
+			
+			int zhiWuX = 256 + j * 81; //植物左上角x坐标
+			//原版
+			//int x1 = zhiWuX + 10;//植物碰撞检测区域左边界
+			//int x2 = zhiWuX + 60;//右
+			//int x3 = zms[i].x + 50; //僵尸碰撞检测区域左边界
+			//优化后
+			int zhiWuW = imgZhiWu[map[row][j].type - 1][0]->getwidth();  // 植物实际宽度
+			int x1 = zhiWuX;                     // 植物左边界
+			int x2 = zhiWuX + zhiWuW;            // 植物右边界
+			int zmX = zms[i].x;                  // 僵尸左边界
+			if(zmX + imgZM[0].getwidth() > x1 && zmX < x2) {
+				isEatingAnyPlant = true;  // 标记僵尸正在啃食
+				if(map[row][j].catched) {
+					zms[i].frameIndex++;
+					if(zms[i].frameIndex >= EAT_FRAME_THRESHOLD) {
+						zms[i].frameIndex = 0;
+						map[row][j].deadTime += EAT_DAMAGE; //每次吃植物，植物血量减少100
+						if (map[row][j].deadTime >= PLANT_MAX_HP) { //植物血量为500
+							map[row][j].deadTime = 0;
+							map[row][j].type = 0; //植物死亡
+							map[row][j].catched = false;
+
+							zms[i].eating = false;
+							zms[i].speed = 1;// + rand() % 2; //僵尸恢复移动
+							zms[i].frameIndex = 0; //重置僵尸行走动画
+						}
+					}
+				}
+				else {
+					map[row][j].catched = true;
+					map[row][j].deadTime = 0; //植物血量
+					zms[i].eating = true;
+					zms[i].speed = 0; //僵尸停止移动
+					zms[i].frameIndex = 0; //重置僵尸吃植物动画
+				}
+				break; // 跳出植物循环，避免重复检测同一僵尸
+			} 
+		}
+		// 如果当前僵尸没有啃食任何植物，且之前处于啃食状态，则恢复行走状态
+		if (!isEatingAnyPlant && zms[i].eating) {
+			zms[i].eating = false;
+			zms[i].speed = 1 + rand() % 2;
+			zms[i].frameIndex = 0;
+		}
+	}
+}
+
+void collisionCheck() {
+	checkBullet2Zm();// 子弹dui僵尸碰撞检测
+	checkZm2ZhiWu(); // 僵尸对植物碰撞检测
+}
+
+
 
 
 //改变游戏的状态
