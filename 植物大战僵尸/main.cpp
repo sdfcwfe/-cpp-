@@ -66,9 +66,11 @@ struct zm {
 	int speed; //僵尸的移动速度（像素/帧）
 	bool used; //是否被使用 0:未使用 1:已使用
 	int row; //僵尸所在的行
+	bool dead; // 僵尸是否dead
 };
 struct zm zms[10]; //10个僵尸
 IMAGE imgZM[22]; //僵尸图片
+IMAGE imgZMDead[20]; 
 
 // 子弹的数据结构体
 struct bullet {
@@ -189,6 +191,14 @@ void gameInit()
 			imgBullBlast[3].getheight() * k,true);
 	}
 
+	for (int i = 0; i < 20; i++) {
+		//使用char字符而非_t()宽字符宏
+		sprintf_s(name, sizeof(name), "res/zm_dead/%d.png", i + 1);
+		wchar_t wname[64];// 转成宽字符
+		MultiByteToWideChar(CP_ACP, 0, name, -1, wname, 64);//importamt
+		loadimage(&imgZMDead[i], wname);
+	}
+
 	//关闭图形窗口
 	//closegraph();
 }
@@ -197,12 +207,26 @@ void drawZM() {
 	int zmMax = sizeof(zms) / sizeof(zms[0]);
 	for(int i = 0; i < zmMax; i++) {
 		if (zms[i].used) {
-			IMAGE* img = &imgZM[zms[i].frameIndex];
-			putimagePNG(
+			// IMAGE* img = &imgZM[zms[i].frameIndex];
+			//IMAGE* img = (zms[i].dead) ? imgZMDead : imgZM;
+			// 
+			IMAGE* imgArray = zms[i].dead ? imgZMDead : imgZM;
+			// img += zms[i].frameIndex;
+			// 计算安全的帧索引,防止越界）
+			int maxFrames = zms[i].dead ? 20 : 22;
+			int frameIndex = zms[i].frameIndex % maxFrames;
+
+			/*putimagePNG(
 				zms[i].x, 
 				zms[i].y-img->getheight(),
 				img
+			);*/
+			putimagePNG(
+				zms[i].x,
+				zms[i].y - imgArray[frameIndex].getheight(),
+				&imgArray[frameIndex]  // 正确获取图片地址
 			);
+
 
 			/*int x = zms[i].x;
 			int y = zms[i].y;
@@ -505,10 +529,21 @@ void updateZM() {
 	if (now - lastMoveTime >= MOVE_INTERVAL) {
 		for (int i = 0; i < zmMax; i++) {
 			if (zms[i].used) {
+				if(zms[i].dead) {
+					//播放僵尸死亡动画
+					if (zms[i].frameIndex < 20) {
+						zms[i].frameIndex++;
+					}
+					else {
+						zms[i].used = false; //动画播放完，僵尸消失
+						zms[i].dead = false;
+					}
+					continue; //跳过后续移动和动画更新
+				}
 				zms[i].x -= zms[i].speed; // 速度保持 1-2 像素
 				zms[i].frameIndex = (zms[i].frameIndex + 1) % 22;
 				if (zms[i].x < 170) {
-					MessageBox(NULL, _T("Game Over!"), _T("提示"), MB_OK);
+ 					MessageBox(NULL, _T("Game Over!"), _T("提示"), MB_OK);
 					exit(0);//游戏结束
 				}
 			}
@@ -635,19 +670,23 @@ void collisionCheck() {
 
 	for (int i = 0; i < bCount; i++) {
 		if (bullets[i].used == false || bullets[i].blast)continue;
+
 		for (int k = 0; k < zCount; k++) {
-			if (zms[i].used == false) continue;
-			int x1 = zms[k].x + 80;
-			int x2 = zms[k].x + 110;
+			if (zms[k].used == false) continue;
+			int x1 = zms[k].x + 50;
+			int x2 = zms[k].x + 100;
 			int x = bullets[i].x;
-			if (bullets[i].row == zms[k].row && x > x1 && x < x2 ) {
+			if (zms[k].dead == false && bullets[i].row == zms[k].row && x > x1 && x < x2 ) {
 				zms[k].blood -= 20;
 				bullets[i].blast = true;
 				bullets[i].speed = 0;
 				bullets[i].frameIndex = 0;  // 重置爆炸帧
 
 				if (zms[k].blood <= 0) {
-					zms[k].used = false; // 僵尸死亡
+					// zms[k].used = false; 不能立刻标记,要播放死亡动画
+					zms[k].speed = 0;
+					zms[k].dead = true;
+					zms[k].frameIndex = 0; // 重置死亡动画帧
 				}
 				break; // 子弹已击中，跳出僵尸循环
 			}
