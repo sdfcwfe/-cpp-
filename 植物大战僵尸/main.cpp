@@ -724,78 +724,172 @@ void checkBullet2Zm() {
 	}
 }
 
+//void checkZm2ZhiWu() {
+//	int zCount = sizeof(zms) / sizeof(zms[0]);
+//	// 1. 确定动画速度和伤害参数
+//	const int EAT_FRAME_THRESHOLD = 200;  // 啃食间隔：300
+//	const int PLANT_MAX_HP = 200;      // 植物总血量：300
+//	const int EAT_DAMAGE = 100;          // 每次啃食伤害：100
+//	const int EAT_ANIM_INTERVAL = 100; // 每100毫秒
+//
+//
+//	static DWORD lastEatAnimTime[10] = { 0 }; // 每个僵尸独立的啃食动画计时器（10个僵尸槽位）
+//	static DWORD lastDamageTime[10] = { 0 }; // 僵尸伤害计时器
+//	static int eatingCol[10] = { -1 };       // 僵尸当前啃食的植物列（-1表示未啃食)
+//	for (int i = 0; i < zCount; i++) {
+//		if (zms[i].dead) continue;
+//
+//		int row = zms[i].row;
+//		bool isEatingAnyPlant = false;  // 标记当前僵尸CHI植物
+//		DWORD now = GetTickCount();
+//		for(int j = 0; j < 9; j++) {
+//			if (map[row][j].type == 0) continue;
+//			
+//			int zhiWuX = 256 + j * 81; //植物左上角x坐标
+//			//原版
+			//int x1 = zhiWuX + 10;//植物碰撞检测区域左边界
+			//int x2 = zhiWuX + 60;//右
+			//int zmX = zms[i].x + 80; //僵尸碰撞检测区域左边界
+//			//优化后
+//			//int zhiWuW = imgZhiWu[map[row][j].type - 1][0]->getwidth();  // 植物实际宽度
+//			//int x1 = zhiWuX;                     // 植物左边界
+//			//int x2 = zhiWuX + zhiWuW;            // 植物右边界
+//			//int zmX = zms[i].x;                  // 僵尸左边界
+//			if(zmX  > x1 && zmX < x2) { //+ imgZM[0].getwidth()
+//				isEatingAnyPlant = true;  // 标记僵尸正在啃食
+//				zms[i].eating = true;
+//				zms[i].speed = 0; // 停止移动
+//
+//				if(map[row][j].catched) {
+//					// 2. 控制啃食动画播放速度（按时间间隔更新，而非随主循环）
+//					//zms[i].eatFrame++;
+//					if(now - lastEatAnimTime[i] >= EAT_ANIM_INTERVAL) {
+//						zms[i].eatFrame = (zms[i].eatFrame + 1) % 21; // 21帧动画循环
+//                        lastEatAnimTime[i] = now; // 更新计时器
+//					}
+//
+//					if(zms[i].eatFrame >= EAT_FRAME_THRESHOLD) {
+//						zms[i].eatFrame = 0;
+//						map[row][j].deadTime += EAT_DAMAGE; //每次吃植物，植物血量减少100
+//						if (map[row][j].deadTime >= PLANT_MAX_HP) { //植物血量为500
+//							map[row][j].deadTime = 0;
+//							map[row][j].type = 0; //植物死亡
+//							map[row][j].catched = false;
+//
+//							zms[i].eating = false;
+//							zms[i].speed = 1;// + rand() % 2; //僵尸恢复移动
+//							lastEatAnimTime[i] = 0; // 重置该僵尸的动画计时器
+//							// zms[i].frameIndex = 0; //重置僵尸行走动画
+//						}
+//					}
+//				}
+//				else {
+//					map[row][j].catched = true;
+//					map[row][j].deadTime = 0; //植物血量
+//					zms[i].eating = true;
+//					zms[i].speed = 0; //僵尸停止移动
+//					zms[i].eatFrame = 0; //重置僵尸吃植物动画
+//					lastEatAnimTime[i] = now; // 初始化动画计时器
+//				}
+//				break; // 跳出植物循环，避免重复检测同一僵尸
+//			} 
+//		}
+//		// 如果当前僵尸没有啃食任何植物，且之前处于啃食状态，则恢复行走状态
+//		if (!isEatingAnyPlant && zms[i].eating) {
+//			zms[i].eating = false;
+//			zms[i].speed = 1 + rand() % 2;
+//			zms[i].walkFrame = 0;
+//			lastEatAnimTime[i] = 0; // 重置计时器
+//		}
+//	}
+//}
+
 void checkZm2ZhiWu() {
 	int zCount = sizeof(zms) / sizeof(zms[0]);
-	// 1. 定义常量：统一控制啃食频率和植物血量
-	const int EAT_FRAME_THRESHOLD = 200;  // 啃食间隔：300
-	const int PLANT_MAX_HP = 200;      // 植物总血量：300
-	const int EAT_DAMAGE = 100;          // 每次啃食伤害：100
-	const int EAT_ANIM_INTERVAL = 100; // 每100毫秒
-	static DWORD lastEatAnimTime[10] = { 0 }; // 每个僵尸独立的啃食动画计时器（10个僵尸槽位）
+	// 1. 核心参数：明确区分动画速度和伤害频率ai
+	const int EAT_ANIM_INTERVAL = 300;    // 啃食动画速度（300毫秒/帧，≈3.3FPS）
+	const int DAMAGE_INTERVAL = 1500;     // 伤害间隔（1500毫秒/次，即1.5秒啃掉100血）
+	const int PLANT_MAX_HP = 300;         // 植物总血量（3次伤害死亡）
+	const int EAT_DAMAGE = 100;           // 每次伤害值
+
+	// 2. 为每个僵尸独立分配：动画计时器、伤害计时器、当前啃食的植物列（避免多株植物冲突）ai
+	static DWORD lastAnimTime[10] = { 0 };   // 僵尸啃食动画计时器（10个僵尸槽位）
+	static DWORD lastDamageTime[10] = { 0 }; // 僵尸伤害计时器
+	static int eatingCol[10] = { -1 };       // 僵尸当前啃食的植物列（-1表示未啃食）
+
 	for (int i = 0; i < zCount; i++) {
-		if (zms[i].dead) continue;
+		if (zms[i].dead || !zms[i].used) {
+			// 重置僵尸状态（避免死亡后残留计时器）ai
+			eatingCol[i] = -1;
+			lastAnimTime[i] = 0;
+			lastDamageTime[i] = 0;
+			continue;
+		}
 
 		int row = zms[i].row;
-		bool isEatingAnyPlant = false;  // 标记当前僵尸CHI植物
+		bool isEating = false;
 		DWORD now = GetTickCount();
-		for(int j = 0; j < 9; j++) {
+
+		for (int j = 0; j < 9; j++) {
 			if (map[row][j].type == 0) continue;
-			
-			int zhiWuX = 256 + j * 81; //植物左上角x坐标
-			//原版
-			int x1 = zhiWuX + 10;//植物碰撞检测区域左边界
-			int x2 = zhiWuX + 60;//右
-			int zmX = zms[i].x + 80; //僵尸碰撞检测区域左边界
-			//优化后
-			//int zhiWuW = imgZhiWu[map[row][j].type - 1][0]->getwidth();  // 植物实际宽度
-			//int x1 = zhiWuX;                     // 植物左边界
-			//int x2 = zhiWuX + zhiWuW;            // 植物右边界
-			//int zmX = zms[i].x;                  // 僵尸左边界
-			if(zmX  > x1 && zmX < x2) { //+ imgZM[0].getwidth()
-				isEatingAnyPlant = true;  // 标记僵尸正在啃食
+
+			// 3. 精准碰撞检测
+			int zhiWuX = 256 + j * 81;
+			int x1 = zhiWuX + 10;            // 植物碰撞检测左边界
+			int x2 = zhiWuX + 60;            // 植物碰撞检测右边界
+			int zmX = zms[i].x + 80;         // 僵尸碰撞检测左边界
+
+			// 判定条件：僵尸接触植物
+			if (zmX > x1 && zmX < x2) {
+				isEating = true;
+				eatingCol[i] = j; // 记录当前
 				zms[i].eating = true;
-				zms[i].speed = 0; // 停止移动
+				zms[i].speed = 0;
 
-				if(map[row][j].catched) {
-					// 2. 控制啃食动画播放速度（按时间间隔更新，而非随主循环）
-					//zms[i].eatFrame++;
-					if(now - lastEatAnimTime[i] >= EAT_ANIM_INTERVAL) {
-						zms[i].eatFrame = (zms[i].eatFrame + 1) % 21; // 21帧动画循环
-                        lastEatAnimTime[i] = now; // 更新计时器
-					}
+				// 4. 控制吃植物动画播放速度
+				if (now - lastAnimTime[i] >= EAT_ANIM_INTERVAL) {
+					zms[i].eatFrame = (zms[i].eatFrame + 1) % 21; // 21帧动画循环
+					lastAnimTime[i] = now;
+				}
 
-					if(zms[i].eatFrame >= EAT_FRAME_THRESHOLD) {
-						zms[i].eatFrame = 0;
-						map[row][j].deadTime += EAT_DAMAGE; //每次吃植物，植物血量减少100
-						if (map[row][j].deadTime >= PLANT_MAX_HP) { //植物血量为500
-							map[row][j].deadTime = 0;
-							map[row][j].type = 0; //植物死亡
-							map[row][j].catched = false;
+				// 5. 控制伤害判定（按时间间隔）
+				if (now - lastDamageTime[i] >= DAMAGE_INTERVAL) {
+					map[row][j].deadTime += EAT_DAMAGE;
+					lastDamageTime[i] = now; // 重置伤害计时器
 
-							zms[i].eating = false;
-							zms[i].speed = 1;// + rand() % 2; //僵尸恢复移动
-							lastEatAnimTime[i] = 0; // 重置该僵尸的动画计时器
-							// zms[i].frameIndex = 0; //重置僵尸行走动画
-						}
+					// 6. 植物血量耗尽：标记死亡并重置所有状态
+					if (map[row][j].deadTime >= PLANT_MAX_HP) {
+						// 植物死亡
+						map[row][j].type = 0;
+						map[row][j].catched = false;
+						map[row][j].deadTime = 0;
+						map[row][j].frameIndex = 0;
+
+						// 僵尸恢复行走
+						zms[i].eating = false;
+						zms[i].speed = 1 + rand() % 2;
+						zms[i].eatFrame = 0; // 重置啃食动画帧
+
+						// 重置该僵尸的计时器和啃食列
+						lastAnimTime[i] = 0;
+						lastDamageTime[i] = 0;
+						eatingCol[i] = -1;
+
+						break; // 植物已死亡，跳出循环
 					}
 				}
-				else {
-					map[row][j].catched = true;
-					map[row][j].deadTime = 0; //植物血量
-					zms[i].eating = true;
-					zms[i].speed = 0; //僵尸停止移动
-					zms[i].eatFrame = 0; //重置僵尸吃植物动画
-					lastEatAnimTime[i] = now; // 初始化动画计时器
-				}
-				break; // 跳出植物循环，避免重复检测同一僵尸
-			} 
+				break; // 一个僵尸吃一株植物
+			}
 		}
-		// 如果当前僵尸没有啃食任何植物，且之前处于啃食状态，则恢复行走状态
-		if (!isEatingAnyPlant && zms[i].eating) {
+
+		// 7. 未吃任何植物：彻底重置状态
+		if (!isEating) {
 			zms[i].eating = false;
 			zms[i].speed = 1 + rand() % 2;
-			zms[i].walkFrame = 0;
-			lastEatAnimTime[i] = 0; // 重置计时器
+			zms[i].eatFrame = 0;
+			eatingCol[i] = -1;
+			lastAnimTime[i] = 0;
+			lastDamageTime[i] = 0;
 		}
 	}
 }
@@ -804,8 +898,6 @@ void collisionCheck() {
 	checkBullet2Zm();// 子弹dui僵尸碰撞检测
 	checkZm2ZhiWu(); // 僵尸对植物碰撞检测
 }
-
-
 
 
 //改变游戏的状态
