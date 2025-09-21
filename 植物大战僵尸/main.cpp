@@ -1,4 +1,6 @@
 /*
+	1.5.0 植物大战僵尸(向日葵生成阳光)
+
 	1.创建新的项目
 	2.添加图形库
 	3.实现最开始的游戏场景
@@ -13,9 +15,10 @@
 #include <time.h>
 #include <math.h>
 #include"tools.h" 
+#include "vector2.h"
 
-#include <mmsyscom.h>
-#pragma comment(lib, "winmm.lib")
+#include <mmsyscom.h>//引用多媒体头文件
+#pragma comment(lib, "winmm.lib")//引用多媒体库
 
 #define WIN_WIDTH 900 //游戏窗口宽度
 #define WIN_HEIGHT 600 //游戏窗口高度
@@ -35,11 +38,18 @@ int curZhiWu = 0; //表示当前选中的植物 0未选中,1豌豆射手,2向日葵
 struct zhiwu{
 	int type; //0:没有植物;1:有植物;
 	int frameIndex; //当前播放到第几帧
+
 	bool catched; //是否被僵尸吃
 	int deadTime; //植物的血量
+
+	int timer; //植物生成sunshine的时间
+	int x, y; //植物的坐标
 };
 
 struct zhiwu map[3][9]; //表示游戏中的植物
+
+enum {SUNSHINE_DOWN, SUNSHINE_CROUND, SUNSHINE_COLLECT, SUNSHINE_RPODUCT};
+// sunshine 下落,落地,被收集,生成
 
 struct sunshineBall {
 	int x, y; //阳光的坐标 
@@ -52,6 +62,8 @@ struct sunshineBall {
 
 	float xoff;
 	float yoff;
+
+	//贝塞尔曲线控制点
 }; 
 bool isSunshineActive = false; // 初始为false，表示没有活跃的阳光
 //10个阳光球(循环出现)
