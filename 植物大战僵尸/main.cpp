@@ -62,8 +62,14 @@ struct sunshineBall {
 
 	float xoff;
 	float yoff;
-
 	//贝塞尔曲线控制点
+
+	float t; // 贝塞尔曲线时间点0,1
+	vector2 p1, p2, p3, p4; // 贝塞尔曲线的四个点
+	vector2 pCur; // 当前时刻阳光的位置
+	float speed; // 阳光移动的速度
+	int status; // 阳光的状态
+
 }; 
 bool isSunshineActive = false; // 初始为false，表示没有活跃的阳光
 //10个阳光球(循环出现)
@@ -285,6 +291,17 @@ void drawZM() {
 	}
 }
 
+void drawSunshines() {
+	int ballMax = sizeof(balls) / sizeof(balls[0]);
+	for (int i = 0; i < ballMax; i++) {
+		//if (balls[i].used) {
+		if(balls[i].used){
+			IMAGE* img = &imgSunshineBall[balls[i].frameIndex];
+			putimagePNG(balls[i].x, balls[i].y, img);
+		}
+	}
+}
+
 void updateWindow()
 {
 	BeginBatchDraw(); //开始批量绘图，防止闪烁(双缓冲
@@ -310,25 +327,20 @@ void updateWindow()
 	for (int i = 0; i < 3; i++) {
 		for (int j = 0; j < 9; j++) {
 			if (map[i][j].type > 0) {
-				int x = 256 + j * 81;
-				int y = 179 + i * 102+10;
+				/*int x = 256 + j * 81;
+				int y = 179 + i * 102+10;*/
 				int zhiwutype = map[i][j].type-1;
 				int index = map[i][j].frameIndex;
 				//putimagePNG(curX , curY , img);
-				if (imgZhiWu[zhiwutype][index] != NULL) {
+				/*if (imgZhiWu[zhiwutype][index] != NULL) {
 					putimagePNG(x, y, imgZhiWu[zhiwutype][index]);
-				}
+				}*/
+				putimagePNG(map[i][j].x, map[i][j].y, imgZhiWu[zhiwutype][index]);
 			}
 		}
 	}
 
-	int ballMax = sizeof(balls) / sizeof(balls[0]);
-	for(int i = 0; i < ballMax; i++) {
-		if (balls[i].used) {
-			IMAGE* img = &imgSunshineBall[balls[i].frameIndex];
-			putimagePNG(balls[i].x, balls[i].y, img);
-		}
-	}
+	drawSunshines();
 
 	char scoreText[8];
 	sprintf_s(scoreText, sizeof(scoreText), "%d", sunshine);
@@ -375,10 +387,14 @@ void collectSunshine(ExMessage* msg) {
 	int h = imgSunshineBall[0].getheight();
 	for (int i = 0; i < count; i++) {
 		if (balls[i].used) {
-			int x = balls[i].x;
-			int y = balls[i].y;
+			/*int x = balls[i].x;
+			int y = balls[i].y;*/
+			int x = balls[i].pCur.x;
+			int y = balls[i].pCur.y;
+
 			if (msg->x > x && msg->x < x + w &&
 				msg->y > y && msg->y < y + h) {
+				balls[i].status = SUNSHINE_COLLECT;
 				balls[i].used = false;
 				sunshine += 25;
 				// 关键修复：阳光被收集后，标记“无活跃阳光”
@@ -388,11 +404,17 @@ void collectSunshine(ExMessage* msg) {
 				MultiByteToWideChar(CP_ACP, 0, "play res/sunshine.mp3", -1, cmd, 64);
 				mciSendString(cmd, 0, 0, 0);
 				//设置阳光偏移量
-				float destY = 0;
-				float destX = 0;
-				float angle = atan((y - destY) / (x - destX));
-				balls[i].xoff = 4 * cos(angle);
-				balls[i].yoff = 4 * sin(angle);
+				//float destY = 0;
+				//float destX = 0;
+				//float angle = atan((y - destY) / (x - destX));
+				//balls[i].xoff = 4 * cos(angle);
+				//balls[i].yoff = 4 * sin(angle);
+				balls[i].p1 = balls[i].pCur;//now location
+				balls[i].p4 = vector2(262, 0);//dest location
+				float distance = dis(balls[i].p4 - balls[i].p1);
+				balls[i].speed = 1.0 / (distance / 8);
+				balls[i].t = 0;
+
 			}
 		}
 	}
@@ -427,7 +449,12 @@ void userClick(){
 
 				if (map[row][col].type == 0) {
 					map[row][col].type = curZhiWu;
-					map[row][col].frameIndex;
+					map[row][col].frameIndex = 0;
+
+
+					
+					map[row][col].x = 256 + col * 81;
+					map[row][col].y = 179 + row * 102 + 10;
 
 				}
 				//status = 0; // 重置“拖动状态”
